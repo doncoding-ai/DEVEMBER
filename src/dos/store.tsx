@@ -7,6 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState, Platform } from 'react-native';
 
 import { answeredTitle, buildSnapshot, MARKER, nowEat, type Ask, type Board, type BoardHealth, type BoardKey, type Decision, type Snapshot } from './core';
+import type { Look, ThemePref } from '@/ui/theme';
 import * as trello from './trello';
 
 export interface Config {
@@ -15,6 +16,9 @@ export interface Config {
   boards: Record<BoardKey, string>;
   /** Work world shows counts only, never titles (on by default, as on the desktop). */
   discreetWork: boolean;
+  /** Same four looks as the desktop, each dark or light. */
+  look: Look;
+  theme: ThemePref;
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -22,6 +26,8 @@ const DEFAULT_CONFIG: Config = {
   token: '',
   boards: { dos: 'vKKgCDGD', don: '5jR6zssk', boom: 'vbw8udrd' },
   discreetWork: true,
+  look: 'liquid',
+  theme: 'system',
 };
 
 const STORE_KEY = 'dos-pocket-config';
@@ -54,6 +60,8 @@ interface DosState {
   error: string | null;
   refresh: () => Promise<void>;
   setConfig: (c: Config) => Promise<void>;
+  /** Look and theme apply at once and are saved, without re-reading the boards. */
+  setAppearance: (a: Partial<Pick<Config, 'look' | 'theme'>>) => void;
   answer: (ask: Ask, d: Decision) => Promise<void>;
   addNote: (text: string) => Promise<void>;
 }
@@ -123,6 +131,13 @@ export function DosProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
+  const setAppearance = useCallback((a: Partial<Pick<Config, 'look' | 'theme'>>) => {
+    const c = { ...cfgRef.current, ...a };
+    setConfigState(c);
+    cfgRef.current = c;
+    saveConfig(c).catch(() => undefined);
+  }, []);
+
   const answer = useCallback(async (ask: Ask, d: Decision) => {
     const answered = snapshot?.answeredListId ?? null;
     const comment = `Answered from Dos Pocket: ${MARKER[d]} · ${nowEat()}`;
@@ -138,8 +153,8 @@ export function DosProvider({ children }: { children: ReactNode }) {
   }, [snapshot]);
 
   const value = useMemo<DosState>(
-    () => ({ ready, config, configured, persistent: secure, snapshot, loading, error, refresh, setConfig, answer, addNote }),
-    [ready, config, configured, snapshot, loading, error, refresh, setConfig, answer, addNote],
+    () => ({ ready, config, configured, persistent: secure, snapshot, loading, error, refresh, setConfig, setAppearance, answer, addNote }),
+    [ready, config, configured, snapshot, loading, error, refresh, setConfig, setAppearance, answer, addNote],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
